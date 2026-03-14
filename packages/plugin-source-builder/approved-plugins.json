@@ -1,0 +1,20 @@
+{
+	"io.github.jackgruber.backup": {
+		"repository_url": "https://github.com/JackGruber/joplin-plugin-backup",
+		"reviewed_commit": "6a192515eaf71fa6f1aaaa74d406dae45981aa42",
+		"review_date": "2026-03-14",
+		"reviewer": "marph",
+		"status": "approved",
+		"build_command": "npm run dist",
+		"publish_dir": "publish"
+	},
+	"joplin.plugin.note.tabs": {
+		"repository_url": "https://github.com/benji300/joplin-note-tabs",
+		"reviewed_commit": "ea73f68815265a31caa9d3117daa228c1a7e5cc2",
+		"review_date": "2026-03-14",
+		"reviewer": "sriramvarunkumar",
+		"status": "approved",
+		"build_command": "npm run dist",
+		"publish_dir": "publish"
+	}
+}
