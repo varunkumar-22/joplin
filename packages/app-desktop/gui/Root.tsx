@@ -22,6 +22,7 @@ import ImportScreen from './ImportScreen';
 import ResourceScreen from './ResourceScreen';
 import ProfileEditor from './ProfileEditor';
 import Navigator from './Navigator';
+import ConflictResolutionPage from './ConflictResolution/ConflictResolutionPage';
 import WelcomeUtils from '@joplin/lib/WelcomeUtils';
 import JoplinCloudLoginScreen from './JoplinCloudLoginScreen';
 import InteropService from '@joplin/lib/services/interop/InteropService';
@@ -168,6 +169,7 @@ class RootComponent extends React.Component<Props, any> {
 			Resources: { screen: ResourceScreen, title: () => _('Note attachments') },
 			ProfileEditor: { screen: ProfileEditor, title: () => _('Manage profiles') },
 			Status: { screen: StatusScreen, title: () => _('Synchronisation Status') },
+			ConflictResolution: { screen: ConflictResolutionPage, title: () => 'Conflict Resolution' },
 		};
 
 		return (
@@ -203,6 +205,8 @@ const mapStateToProps = (state: AppState) => {
 const Root = connect(mapStateToProps)(RootComponent);
 
 const store = app().store();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Temporary: expose store for dev console testing
+(window as any).__store = store;
 
 const root = createRoot(document.getElementById('react-root'));
 root.render(
