@@ -9,23 +9,32 @@ const styled = require('styled-components').default;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- styled-components theme prop
 type StyleProps = any;
 
-interface AdditionSection {
+interface BaseSection {
+	id: number;
+	contextBefore: string;
+	contextAfter: string;
+}
+
+interface AdditionSection extends BaseSection {
 	type: 'addition';
-	remoteText: string;
+	side: 'remote';
+	content: string;
 }
 
-interface DeletionSection {
+interface DeletionSection extends BaseSection {
 	type: 'deletion';
-	deletedText: string;
+	side: 'local';
+	content: string;
 }
 
-interface ConflictSection {
+interface ConflictSection extends BaseSection {
 	type: 'conflict';
-	localText: string;
-	remoteText: string;
+	base: string;
+	mine: string;
+	theirs: string;
 }
 
-type Section = (AdditionSection | DeletionSection | ConflictSection) & { id: number };
+type Section = AdditionSection | DeletionSection | ConflictSection;
 
 type Resolution = 'accepted' | 'rejected' | 'mine' | 'theirs' | 'edited';
 
@@ -47,24 +56,36 @@ const mockSections: Section[] = [
 	{
 		id: 1,
 		type: 'addition',
-		remoteText: 'Discussed the Q3 roadmap and confirmed timelines with the team.',
+		side: 'remote',
+		content: 'Discussed the Q3 roadmap and confirmed timelines with the team.',
+		contextBefore: 'Project Meeting Notes Q3 Review',
+		contextAfter: 'Meeting scheduled for Monday at 10am',
 	},
 	{
 		id: 2,
 		type: 'conflict',
-		localText: 'Meeting scheduled for Monday at 10am',
-		remoteText: 'Meeting rescheduled to Wednesday at 2pm',
+		base: 'Meeting is yet to be scheduled',
+		mine: 'Meeting scheduled for Monday at 10am',
+		theirs: 'Meeting rescheduled to Wednesday at 2pm',
+		contextBefore: 'Discussed the Q3 roadmap and confirmed timelines with the team.',
+		contextAfter: 'Action items to be shared by end of day Friday.',
 	},
 	{
 		id: 3,
 		type: 'deletion',
-		deletedText: 'Action items to be shared by end of day Friday.',
+		side: 'local',
+		content: 'Action items to be shared by end of day Friday.',
+		contextBefore: 'Meeting scheduled for Monday at 10am',
+		contextAfter: 'Attendees: John, Sarah, Mike',
 	},
 	{
 		id: 4,
 		type: 'conflict',
-		localText: 'Attendees: John, Sarah, Mike',
-		remoteText: 'Attendees: John, Sarah, Mike, Lisa, Tom',
+		base: 'Attendees: John, Sarah',
+		mine: 'Attendees: John, Sarah, Mike',
+		theirs: 'Attendees: John, Sarah, Mike, Lisa, Tom',
+		contextBefore: 'Action items to be shared by end of day Friday.',
+		contextAfter: 'Next meeting to be confirmed by end of week.',
 	},
 ];
 
@@ -125,12 +146,24 @@ const StyledCheckmark = styled.span`
 	font-size: 16px;
 `;
 
-const StyledText = styled.p<{ strikethrough?: boolean }>`
+const StyledContext = styled.div`
+	font-size: ${(props: StyleProps) => props.theme.fontSize * 0.9}px;
+	color: ${(props: StyleProps) => props.theme.colorFaded};
+	line-height: 1.5em;
+	padding: 6px 10px;
+	margin: 6px 0;
+	border-left: 3px solid ${(props: StyleProps) => props.theme.dividerColor};
+	background-color: ${(props: StyleProps) => props.theme.backgroundColor3};
+	border-radius: 0 4px 4px 0;
+`;
+
+const StyledText = styled.p<{ strikethrough?: boolean; faded?: boolean }>`
 	margin: 0 0 10px 0;
 	font-size: ${(props: StyleProps) => props.theme.fontSize}px;
 	line-height: 1.6em;
-	color: ${(props: StyleProps) => props.strikethrough ? props.theme.colorFaded : props.theme.color};
+	color: ${(props: StyleProps) => (props.strikethrough || props.faded) ? props.theme.colorFaded : props.theme.color};
 	text-decoration: ${(props: StyleProps) => props.strikethrough ? 'line-through' : 'none'};
+	font-style: ${(props: StyleProps) => props.faded ? 'italic' : 'normal'};
 `;
 
 const StyledButtonRow = styled.div`
@@ -145,12 +178,26 @@ const StyledSideBySide = styled.div`
 	margin-bottom: 10px;
 `;
 
-const StyledVersionBox = styled.div<{ side: 'mine' | 'theirs' }>`
+const StyledVersionBox = styled.div<{ highlighted?: boolean }>`
 	flex: 1;
 	padding: 10px 12px;
-	border: 1px solid ${(props: StyleProps) => props.theme.dividerColor};
+	border: 1px solid ${(props: StyleProps) => props.highlighted ? props.theme.colorCorrect : props.theme.dividerColor};
 	border-radius: 4px;
 	background-color: ${(props: StyleProps) => props.theme.backgroundColor3};
+`;
+
+const StyledEmptyBox = styled.div`
+	flex: 1;
+	padding: 10px 12px;
+	border: 1px dashed ${(props: StyleProps) => props.theme.dividerColor};
+	border-radius: 4px;
+	background-color: transparent;
+`;
+
+const StyledEmptyLabel = styled.span`
+	font-size: ${(props: StyleProps) => props.theme.fontSize * 0.9}px;
+	font-style: italic;
+	color: ${(props: StyleProps) => props.theme.colorFaded};
 `;
 
 const StyledVersionLabel = styled.span`
@@ -159,6 +206,15 @@ const StyledVersionLabel = styled.span`
 	font-weight: bold;
 	color: ${(props: StyleProps) => props.theme.colorFaded};
 	margin-bottom: 6px;
+`;
+
+const StyledBaseBox = styled.div`
+	padding: 10px 12px;
+	border: 1px solid ${(props: StyleProps) => props.theme.dividerColor};
+	border-radius: 4px;
+	margin-bottom: 10px;
+	background-color: ${(props: StyleProps) => props.theme.backgroundColor3};
+	opacity: 0.8;
 `;
 
 const StyledTextarea = styled.textarea`
@@ -245,7 +301,7 @@ const StyledUndoRedoRow = styled.div`
 function ConflictResolutionPage(props: Props) {
 	const initialStates: Record<number, SectionState> = {};
 	for (const s of mockSections) {
-		initialStates[s.id] = { resolution: null, editMode: false, editText: s.type === 'conflict' ? s.localText : '' };
+		initialStates[s.id] = { resolution: null, editMode: false, editText: s.type === 'conflict' ? s.mine : '' };
 	}
 
 	const [sectionStates, setSectionStates] = useState<Record<number, SectionState>>(initialStates);
@@ -275,7 +331,6 @@ function ConflictResolutionPage(props: Props) {
 		}));
 	}, []);
 
-	// auto-resolve addition and deletion sections that aren't conflicting
 	const applyNonConflicting = useCallback(() => {
 		setSectionStates(prev => {
 			const next = { ...prev };
@@ -291,7 +346,6 @@ function ConflictResolutionPage(props: Props) {
 		});
 	}, []);
 
-	// resolve all remaining sections using local version
 	const applyRemainingMine = useCallback(() => {
 		setSectionStates(prev => {
 			const next = { ...prev };
@@ -310,7 +364,6 @@ function ConflictResolutionPage(props: Props) {
 		});
 	}, []);
 
-	// resolve all remaining sections using remote version
 	const applyRemainingTheirs = useCallback(() => {
 		setSectionStates(prev => {
 			const next = { ...prev };
@@ -329,7 +382,7 @@ function ConflictResolutionPage(props: Props) {
 		});
 	}, []);
 
-	const renderAdditionSection = (section: Section & AdditionSection, state: SectionState) => {
+	const renderAdditionSection = (section: AdditionSection, state: SectionState) => {
 		const isResolved = state.resolution !== null;
 		const isRejected = state.resolution === 'rejected';
 
@@ -339,7 +392,18 @@ function ConflictResolutionPage(props: Props) {
 					<StyledLabel variant="addition">Addition (Remote)</StyledLabel>
 					{isResolved && <StyledCheckmark>&#10003;</StyledCheckmark>}
 				</StyledCardHeader>
-				<StyledText strikethrough={isRejected}>{section.remoteText}</StyledText>
+				<StyledContext>{section.contextBefore}</StyledContext>
+				<StyledSideBySide>
+					<StyledEmptyBox>
+						<StyledVersionLabel>Mine</StyledVersionLabel>
+						<StyledEmptyLabel>No content on this side</StyledEmptyLabel>
+					</StyledEmptyBox>
+					<StyledVersionBox highlighted={!isResolved}>
+						<StyledVersionLabel>Theirs</StyledVersionLabel>
+						<StyledText strikethrough={isRejected}>{section.content}</StyledText>
+					</StyledVersionBox>
+				</StyledSideBySide>
+				<StyledContext>{section.contextAfter}</StyledContext>
 				{!isResolved && (
 					<StyledButtonRow>
 						<Button level={ButtonLevel.Primary} title="Accept" onClick={() => resolve(section.id, 'accepted')} />
@@ -350,7 +414,7 @@ function ConflictResolutionPage(props: Props) {
 		);
 	};
 
-	const renderDeletionSection = (section: Section & DeletionSection, state: SectionState) => {
+	const renderDeletionSection = (section: DeletionSection, state: SectionState) => {
 		const isResolved = state.resolution !== null;
 		const isAccepted = state.resolution === 'accepted';
 
@@ -360,7 +424,18 @@ function ConflictResolutionPage(props: Props) {
 					<StyledLabel variant="deletion">Deletion (Local)</StyledLabel>
 					{isResolved && <StyledCheckmark>&#10003;</StyledCheckmark>}
 				</StyledCardHeader>
-				<StyledText strikethrough={isAccepted}>{section.deletedText}</StyledText>
+				<StyledContext>{section.contextBefore}</StyledContext>
+				<StyledSideBySide>
+					<StyledEmptyBox>
+						<StyledVersionLabel>Mine</StyledVersionLabel>
+						<StyledEmptyLabel>Deleted on this side</StyledEmptyLabel>
+					</StyledEmptyBox>
+					<StyledVersionBox highlighted={!isResolved}>
+						<StyledVersionLabel>Theirs</StyledVersionLabel>
+						<StyledText strikethrough={isAccepted}>{section.content}</StyledText>
+					</StyledVersionBox>
+				</StyledSideBySide>
+				<StyledContext>{section.contextAfter}</StyledContext>
 				{!isResolved && (
 					<StyledButtonRow>
 						<Button level={ButtonLevel.Primary} title="Accept" onClick={() => resolve(section.id, 'accepted')} />
@@ -371,7 +446,7 @@ function ConflictResolutionPage(props: Props) {
 		);
 	};
 
-	const renderConflictSection = (section: Section & ConflictSection, state: SectionState) => {
+	const renderConflictSection = (section: ConflictSection, state: SectionState) => {
 		const isResolved = state.resolution !== null;
 
 		return (
@@ -380,6 +455,7 @@ function ConflictResolutionPage(props: Props) {
 					<StyledLabel variant="conflict">Conflict</StyledLabel>
 					{isResolved && <StyledCheckmark>&#10003;</StyledCheckmark>}
 				</StyledCardHeader>
+				<StyledContext>{section.contextBefore}</StyledContext>
 
 				{state.editMode ? (
 					<div>
@@ -393,22 +469,27 @@ function ConflictResolutionPage(props: Props) {
 					</div>
 				) : isResolved ? (
 					<StyledText>
-						{state.resolution === 'mine' ? section.localText
-							: state.resolution === 'theirs' ? section.remoteText
+						{state.resolution === 'mine' ? section.mine
+							: state.resolution === 'theirs' ? section.theirs
 								: state.editText}
 					</StyledText>
 				) : (
 					<div>
+						<StyledBaseBox>
+							<StyledVersionLabel>Original</StyledVersionLabel>
+							<StyledText faded>{section.base}</StyledText>
+						</StyledBaseBox>
 						<StyledSideBySide>
-							<StyledVersionBox side="mine">
+							<StyledVersionBox>
 								<StyledVersionLabel>Mine</StyledVersionLabel>
-								<StyledText>{section.localText}</StyledText>
+								<StyledText>{section.mine}</StyledText>
 							</StyledVersionBox>
-							<StyledVersionBox side="theirs">
+							<StyledVersionBox>
 								<StyledVersionLabel>Theirs</StyledVersionLabel>
-								<StyledText>{section.remoteText}</StyledText>
+								<StyledText>{section.theirs}</StyledText>
 							</StyledVersionBox>
 						</StyledSideBySide>
+						<StyledContext>{section.contextAfter}</StyledContext>
 						<StyledButtonRow>
 							<Button level={ButtonLevel.Primary} title="Use Mine" onClick={() => resolve(section.id, 'mine')} />
 							<Button level={ButtonLevel.Primary} title="Use Theirs" onClick={() => resolve(section.id, 'theirs')} />
@@ -424,11 +505,11 @@ function ConflictResolutionPage(props: Props) {
 		const state = sectionStates[section.id];
 		switch (section.type) {
 		case 'addition':
-			return renderAdditionSection(section as Section & AdditionSection, state);
+			return renderAdditionSection(section, state);
 		case 'deletion':
-			return renderDeletionSection(section as Section & DeletionSection, state);
+			return renderDeletionSection(section, state);
 		case 'conflict':
-			return renderConflictSection(section as Section & ConflictSection, state);
+			return renderConflictSection(section, state);
 		}
 	};
 

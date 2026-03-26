@@ -2,9 +2,10 @@ import * as React from 'react';
 import { useCallback } from 'react';
 import { Dispatch } from 'redux';
 import { FocusNote } from './useFocusNote';
+import Note from '@joplin/lib/models/Note';
 
 const useOnNoteClick = (dispatch: Dispatch, focusNote: FocusNote) => {
-	const onNoteClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+	const onNoteClick = useCallback(async (event: React.MouseEvent<HTMLDivElement>) => {
 		const noteId = event.currentTarget.getAttribute('data-id');
 
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
@@ -15,6 +16,21 @@ const useOnNoteClick = (dispatch: Dispatch, focusNote: FocusNote) => {
 		if (['INPUT'].includes(targetTagName)) return;
 
 		focusNote(noteId);
+
+		// when a conflict note is opened from the conflicts folder,
+		// navigate to the resolution ui instead of the normal editor
+		const note = await Note.load(noteId);
+		if (note && note.is_conflict) {
+			dispatch({
+				type: 'NOTE_SELECT',
+				id: noteId,
+			});
+			dispatch({
+				type: 'NAV_GO',
+				routeName: 'ConflictResolution',
+			});
+			return;
+		}
 
 		if (event.ctrlKey || event.metaKey) {
 			event.preventDefault();
