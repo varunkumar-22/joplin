@@ -1426,6 +1426,7 @@ packages/lib/mimeUtils.test.js
 packages/lib/models/Alarm.js
 packages/lib/models/BaseItem.test.js
 packages/lib/models/BaseItem.js
+packages/lib/models/ConflictNoteState.js
 packages/lib/models/Folder.sharing.test.js
 packages/lib/models/Folder.test.js
 packages/lib/models/Folder.js
@@ -1542,6 +1543,7 @@ packages/lib/services/database/migrations/46.js
 packages/lib/services/database/migrations/47.js
 packages/lib/services/database/migrations/48.js
 packages/lib/services/database/migrations/49.js
+packages/lib/services/database/migrations/50.js
 packages/lib/services/database/migrations/index.js
 packages/lib/services/database/sqlStringToLines.js
 packages/lib/services/database/types.js
