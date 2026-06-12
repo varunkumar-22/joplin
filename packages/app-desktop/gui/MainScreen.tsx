@@ -42,6 +42,7 @@ import validateColumns from './NoteListHeader/utils/validateColumns';
 import TrashNotification from './TrashNotification/TrashNotification';
 import UpdateNotification from './UpdateNotification/UpdateNotification';
 import NoteEditor from './NoteEditor/NoteEditor';
+import ConflictResolutionPage from './ConflictResolution/ConflictResolutionPage';
 import PluginNotification from './PluginNotification/PluginNotification';
 import { Toast } from '@joplin/lib/services/plugins/api/types';
 import PluginService from '@joplin/lib/services/plugins/PluginService';
@@ -87,6 +88,8 @@ interface Props {
 	showInvalidJoplinCloudCredential: boolean;
 	toast: Toast;
 	shouldSwitchToAppleSiliconVersion: boolean;
+	selectedNoteId: string;
+	selectedNoteIsConflict: boolean;
 }
 
 interface ShareFolderDialogOptions {
@@ -668,6 +671,15 @@ class MainScreenComponent extends React.Component<Props, State> {
 			},
 
 			editor: () => {
+				if (this.props.selectedNoteIsConflict) {
+					return <div className='note-editor-wrapper' role='main' aria-label={_('Note')}>
+						<ConflictResolutionPage
+							key={key}
+							noteId={this.props.selectedNoteId}
+						/>
+					</div>;
+				}
+
 				return <div className='note-editor-wrapper' role='main' aria-label={_('Note')}>
 					<NoteEditor
 						windowId={defaultWindowId}
@@ -815,6 +827,7 @@ const mapStateToProps = (state: AppState) => {
 	const syncInfo = localSyncInfoFromState(state);
 	const showNeedUpgradingEnabledMasterKeyMessage = !!EncryptionService.instance().masterKeysThatNeedUpgrading(syncInfo.masterKeys.filter((k) => !!k.enabled)).length;
 	const windowState = stateUtils.windowStateById(state, defaultWindowId);
+	const selectedNote = stateUtils.selectedNote(windowState);
 
 	return {
 		themeId: state.settings.theme,
@@ -848,6 +861,8 @@ const mapStateToProps = (state: AppState) => {
 		showInvalidJoplinCloudCredential: state.settings['sync.target'] === 10 && state.mustAuthenticate,
 		toast: state.toast,
 		shouldSwitchToAppleSiliconVersion: shim.isAppleSilicon() && shim.isMac() && process.arch !== 'arm64',
+		selectedNoteId: selectedNote ? selectedNote.id : '',
+		selectedNoteIsConflict: !!selectedNote && selectedNote.is_conflict === 1,
 	};
 };
 
