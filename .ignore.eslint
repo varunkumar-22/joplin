@@ -236,6 +236,8 @@ packages/app-desktop/gui/ConfigScreen/controls/plugins/SearchPlugins.js
 packages/app-desktop/gui/ConfigScreen/searchHighlight.test.js
 packages/app-desktop/gui/ConfigScreen/searchHighlight.js
 packages/app-desktop/gui/ConflictResolution/ConflictResolutionPage.js
+packages/app-desktop/gui/ConflictResolution/SectionCard.js
+packages/app-desktop/gui/ConflictResolution/SectionList.js
 packages/app-desktop/gui/DialogButtonRow.js
 packages/app-desktop/gui/DialogButtonRow/useKeyboardHandler.js
 packages/app-desktop/gui/DialogTitle.js

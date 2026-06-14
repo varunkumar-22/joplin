@@ -1,43 +1,72 @@
 import * as React from 'react';
-import { useEffect } from 'react';
-import { connect } from 'react-redux';
-import { AppState } from '../../app.reducer';
-import { themeStyle } from '@joplin/lib/theme';
+import { useEffect, useState } from 'react';
+import { _ } from '@joplin/lib/locale';
 import Logger from '@joplin/utils/Logger';
+import Note from '@joplin/lib/models/Note';
+import ConflictNoteState from '@joplin/lib/models/ConflictNoteState';
+import { Section, diffNotes, diffNotesTwoWay } from '@joplin/lib/services/conflict/diffNotes';
+import SectionList from './SectionList';
+import styled from 'styled-components';
 
 const logger = Logger.create('ConflictResolutionPage');
 
 interface Props {
-	themeId: number;
 	noteId: string;
 }
 
+const Root = styled.div`
+	padding: 16px;
+	height: 100%;
+	box-sizing: border-box;
+	overflow-y: auto;
+	background-color: var(--joplin-background-color);
+	color: var(--joplin-color);
+	font-family: var(--joplin-font-family);
+`;
+
+const Title = styled.h2`
+	margin-top: 0;
+`;
+
 const ConflictResolutionPage = (props: Props) => {
+	const [sections, setSections] = useState<Section[]>([]);
+
 	useEffect(() => {
-		logger.info('Mounted for conflict note:', props.noteId);
+		let cancelled = false;
+
+		const load = async () => {
+			const conflictNote = await Note.load(props.noteId);
+			if (!conflictNote) return;
+
+			const state = await ConflictNoteState.byNoteId(props.noteId);
+
+			const localBody = conflictNote.body ?? '';
+			const remoteBody = state ? state.remote_body ?? '' : '';
+			const baseBody = state ? state.base_body ?? '' : '';
+
+			const result = baseBody ?
+				diffNotes(baseBody, localBody, remoteBody) :
+				diffNotesTwoWay(localBody, remoteBody);
+
+			if (cancelled) return;
+
+			logger.info('Sections for conflict note:', props.noteId, result);
+			setSections(result);
+		};
+
+		void load();
+
+		return () => {
+			cancelled = true;
+		};
 	}, [props.noteId]);
 
-	const theme = themeStyle(props.themeId);
-
-	const rootStyle: React.CSSProperties = {
-		padding: 16,
-		height: '100%',
-		boxSizing: 'border-box',
-		backgroundColor: theme.backgroundColor,
-		color: theme.color,
-		fontFamily: theme.fontFamily,
-	};
-
 	return (
-		<div style={rootStyle}>
-			<div>Conflict Resolution UI</div>
-			<div>{props.noteId}</div>
-		</div>
+		<Root>
+			<Title>{_('Resolve conflict')}</Title>
+			<SectionList sections={sections}/>
+		</Root>
 	);
 };
 
-const mapStateToProps = (state: AppState) => ({
-	themeId: state.settings.theme,
-});
-
-export default connect(mapStateToProps)(ConflictResolutionPage);
+export default ConflictResolutionPage;
