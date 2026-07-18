@@ -223,9 +223,9 @@ describe('Synchronizer.conflicts', () => {
 		expect(remainingNote2?.id).toBe(note2.id);
 	}));
 
-	it('should not sync notes with conflicts', (async () => {
+	it('should sync conflict notes so that other clients can display them', (async () => {
 		const f1 = await Folder.save({ title: 'folder' });
-		await Note.save({ title: 'mynote', parent_id: f1.id, is_conflict: 1 });
+		const n1 = await Note.save({ title: 'mynote', parent_id: f1.id, is_conflict: 1 });
 		await synchronizerStart();
 
 		await switchClient(2);
@@ -233,11 +233,13 @@ describe('Synchronizer.conflicts', () => {
 		await synchronizerStart();
 		const notes = await Note.all();
 		const folders = await Folder.all();
-		expect(notes.length).toBe(0);
+		expect(notes.length).toBe(1);
+		expect(notes[0].id).toBe(n1.id);
+		expect(notes[0].is_conflict).toBe(1);
 		expect(folders.length).toBe(1);
 	}));
 
-	it('should not try to delete on remote conflicted notes that have been deleted', (async () => {
+	it('should track deletions of conflict notes so that resolving a conflict propagates', (async () => {
 		const f1 = await Folder.save({ title: 'folder' });
 		const n1 = await Note.save({ title: 'mynote', parent_id: f1.id });
 		await synchronizerStart();
@@ -249,7 +251,8 @@ describe('Synchronizer.conflicts', () => {
 		await Note.delete(n1.id);
 		const deletedItems = await BaseItem.deletedItems(syncTargetId());
 
-		expect(deletedItems.length).toBe(0);
+		expect(deletedItems.length).toBe(1);
+		expect(deletedItems[0].item_id).toBe(n1.id);
 	}));
 
 	async function ignorableNoteConflictTest(withEncryption: boolean) {
@@ -317,6 +320,68 @@ describe('Synchronizer.conflicts', () => {
 
 	it('should always handle conflict if local or remote are encrypted', (async () => {
 		await ignorableNoteConflictTest(true);
+	}));
+
+	// Creates a conflict on client 1 and uploads the resulting conflict note.
+	async function createSyncedConflict() {
+		const folder1 = await Folder.save({ title: 'folder1' });
+		const note1 = await Note.save({ title: 'un', parent_id: folder1.id });
+		await synchronizerStart();
+
+		await switchClient(2);
+
+		await synchronizerStart();
+		await Note.save({ id: note1.id, title: 'Updated on client 2' });
+		await synchronizerStart();
+
+		await switchClient(1);
+
+		await Note.save({ id: note1.id, title: 'Updated on client 1' });
+		await synchronizerStart();
+		// The conflict note may have been created after its upload batch, so sync
+		// again to make sure it has been uploaded.
+		await synchronizerStart();
+
+		const conflictedNotes = await Note.conflictedNotes();
+		expect(conflictedNotes.length).toBe(1);
+		return { note: note1, conflictNote: conflictedNotes[0] };
+	}
+
+	it('should sync a conflict note to other clients and propagate its deletion back', (async () => {
+		const { note, conflictNote } = await createSyncedConflict();
+
+		await switchClient(2);
+
+		await synchronizerStart();
+		const conflictedNotes = await Note.conflictedNotes();
+		expect(conflictedNotes.length).toBe(1);
+		expect(conflictedNotes[0].id).toBe(conflictNote.id);
+		expect(conflictedNotes[0].conflict_original_id).toBe(note.id);
+		expect(conflictedNotes[0].title).toBe('Updated on client 1');
+
+		// Resolving the conflict on this client permanently deletes the conflict
+		// note, and the deletion must reach the client that created it.
+		await Note.delete(conflictNote.id, { toTrash: false });
+		await synchronizerStart();
+
+		await switchClient(1);
+
+		await synchronizerStart();
+		expect((await Note.conflictedNotes()).length).toBe(0);
+	}));
+
+	it('should not upload changes made to a conflict note after its creation', (async () => {
+		const { conflictNote } = await createSyncedConflict();
+
+		await Note.save({ id: conflictNote.id, title: 'Changed after creation' });
+		await synchronizerStart();
+
+		await switchClient(2);
+
+		await synchronizerStart();
+		const conflictedNotes = await Note.conflictedNotes();
+		expect(conflictedNotes.length).toBe(1);
+		expect(conflictedNotes[0].title).toBe('Updated on client 1');
 	}));
 
 });

@@ -573,11 +573,16 @@ export default class Folder extends BaseItem {
 	public static async updateNoteShareIds() {
 		// Find all the notes where the share_id is not the same as the
 		// parent share_id because we only need to update those.
+		//
+		// Conflict notes are excluded: they keep the parent_id of the original note,
+		// and since they are uploaded on creation, giving them the parent's share_id
+		// would push the user's private local version into the recipients' share.
 		const rows = await this.db().selectAll(`
 			SELECT notes.id, folders.share_id, notes.parent_id
 			FROM notes
 			LEFT JOIN folders ON notes.parent_id = folders.id
 			WHERE notes.share_id != folders.share_id
+			AND notes.is_conflict = 0
 		`);
 
 		logger.debug('updateNoteShareIds: notes to update:', rows.length);

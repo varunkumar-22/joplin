@@ -1,5 +1,5 @@
 import { ModelType, DeleteOptions } from '../BaseModel';
-import { BaseItemEntity, DeletedItemEntity, NoteEntity, SyncItemEntity } from '../services/database/types';
+import { BaseItemEntity, DeletedItemEntity, SyncItemEntity } from '../services/database/types';
 import Setting from './Setting';
 import BaseModel from '../BaseModel';
 import time from '../time';
@@ -325,16 +325,6 @@ export default class BaseItem extends BaseModel {
 		let trackDeleted = true;
 		if (options && options.trackDeleted !== null && options.trackDeleted !== undefined) trackDeleted = options.trackDeleted;
 
-		// Don't create a deleted_items entry when conflicted notes are deleted
-		// since no other client have (or should have) them.
-		let conflictNoteIds: string[] = [];
-		if (this.modelType() === BaseModel.TYPE_NOTE) {
-			const conflictNotes = await this.db().selectAll(`SELECT id FROM notes WHERE id IN (${this.escapeIdsForSql(ids)}) AND is_conflict = 1`);
-			conflictNoteIds = conflictNotes.map((n: NoteEntity) => {
-				return n.id;
-			});
-		}
-
 		if (needsShareReadOnlyChecks(this.modelType(), options.changeSource, this.syncShareCache, options.disableReadOnlyCheck)) {
 			const previousItems = await this.loadItemsByTypeAndIds(this.modelType(), ids, { fields: ['share_id', 'id'] });
 			checkIfItemsCanBeChanged(this.modelType(), options.changeSource, previousItems, this.syncShareCache);
@@ -347,8 +337,6 @@ export default class BaseItem extends BaseModel {
 			const queries = [];
 			const now = time.unixMs();
 			for (let i = 0; i < ids.length; i++) {
-				if (conflictNoteIds.indexOf(ids[i]) >= 0) continue;
-
 				// For each deleted item, for each sync target, we need to add an entry in deleted_items.
 				// That way, each target can later delete the remote item.
 				for (let j = 0; j < syncTargetIds.length; j++) {
@@ -749,12 +737,19 @@ export default class BaseItem extends BaseModel {
 			// // CHANGED:
 			// 'SELECT * FROM [ITEMS] items JOIN sync_items s ON s.item_id = items.id WHERE sync_target = ? AND'
 
-			let extraWhere: string[]|string = [];
-			if (className === 'Note') extraWhere.push('is_conflict = 0');
-			if (className === 'Resource') extraWhere.push('encryption_blob_encrypted = 0');
-			if (ItemClass.encryptionSupported()) extraWhere.push('encryption_applied = 0');
+			const extraWhereConditions: string[] = [];
+			if (className === 'Resource') extraWhereConditions.push('encryption_blob_encrypted = 0');
+			if (ItemClass.encryptionSupported()) extraWhereConditions.push('encryption_applied = 0');
 
-			extraWhere = extraWhere.length ? `AND ${extraWhere.join(' AND ')}` : '';
+			const toExtraWhere = (conditions: string[]) => conditions.length ? `AND ${conditions.join(' AND ')}` : '';
+
+			const extraWhere = toExtraWhere(extraWhereConditions);
+
+			// Conflict notes are uploaded when first created, so that other devices can
+			// display and resolve them, but changes to them are never uploaded. This
+			// makes them immutable on the sync target, which is what prevents conflicts
+			// on conflict notes themselves.
+			const changedExtraWhere = toExtraWhere(className === 'Note' ? ['is_conflict = 0', ...extraWhereConditions] : extraWhereConditions);
 
 			// First get all the items that have never been synced under this sync target
 			//
@@ -806,7 +801,7 @@ export default class BaseItem extends BaseModel {
 					this.db().escapeFields(fieldNames),
 					this.db().escapeField(ItemClass.tableName()),
 					Number(syncTarget),
-					extraWhere,
+					changedExtraWhere,
 					newLimit,
 				);
 
@@ -944,8 +939,10 @@ export default class BaseItem extends BaseModel {
 			const className = classNames[i];
 			const ItemClass = this.getClass(className);
 
-			let selectSql = `SELECT id FROM ${ItemClass.tableName()}`;
-			if (ItemClass.modelType() === this.TYPE_NOTE) selectSql += ' WHERE is_conflict = 0';
+			// Conflict notes are uploaded when created, so they legitimately own
+			// sync_items rows - excluding them here would purge those rows and cause
+			// the notes to be re-uploaded as "never synced" on every sync.
+			const selectSql = `SELECT id FROM ${ItemClass.tableName()}`;
 
 			queries.push(`DELETE FROM sync_items WHERE item_location = ${BaseItem.SYNC_ITEM_LOCATION_LOCAL} AND item_type = ${ItemClass.modelType()} AND item_id NOT IN (${selectSql})`);
 		}
