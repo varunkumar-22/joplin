@@ -12,6 +12,13 @@ interface ConflictTitles {
 	remoteTitle: string;
 }
 
+export enum ConflictStaleReason {
+	// The original was edited or synced while the user was resolving
+	Changed = 'changed',
+	// It is in the trash, so nothing can be written back to it
+	Trashed = 'trashed',
+}
+
 const useConflictTitle = (noteId: string) => {
 	const [titles, setTitles] = useState<ConflictTitles|null>(null);
 	const [reloadCount, setReloadCount] = useState(0);
@@ -20,6 +27,7 @@ const useConflictTitle = (noteId: string) => {
 	const [resolvedTitle, setResolvedTitle] = useState<string|null>(null);
 	const [loadedNoteId, setLoadedNoteId] = useState<string|null>(null);
 	const [originalIsStale, setOriginalIsStale] = useState(false);
+	const [staleReason, setStaleReason] = useState(ConflictStaleReason.Changed);
 	const [originalId, setOriginalId] = useState<string|null>(null);
 	const remoteUpdatedTimeRef = useRef(0);
 
@@ -35,6 +43,7 @@ const useConflictTitle = (noteId: string) => {
 				if (cancelled) return;
 
 				setOriginalIsStale(false);
+				setStaleReason(ConflictStaleReason.Changed);
 				setOriginalId(note?.conflict_original_id ?? null);
 
 				if (!note || !note.is_conflict) {
@@ -84,7 +93,17 @@ const useConflictTitle = (noteId: string) => {
 			const original = await Note.load(originalId);
 			// A deleted original is handled by the finish step, which reports it properly
 			if (!original) return;
-			if (original.updated_time > remoteUpdatedTimeRef.current) setOriginalIsStale(true);
+
+			if (original.deleted_time) {
+				setStaleReason(ConflictStaleReason.Trashed);
+				setOriginalIsStale(true);
+				return;
+			}
+
+			if (original.updated_time > remoteUpdatedTimeRef.current) {
+				setStaleReason(ConflictStaleReason.Changed);
+				setOriginalIsStale(true);
+			}
 		} catch (error) {
 			logger.warn('Could not check whether the original note changed', originalId, error);
 		}
@@ -117,6 +136,7 @@ const useConflictTitle = (noteId: string) => {
 		isConflictNote: loaded && isConflict,
 		remoteUpdatedTime,
 		originalIsStale: loaded && isConflict && originalIsStale,
+		staleReason,
 		reloadConflict: () => setReloadCount(count => count + 1),
 	};
 };

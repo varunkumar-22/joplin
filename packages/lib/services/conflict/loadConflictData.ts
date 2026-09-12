@@ -50,6 +50,7 @@ export default async (noteId: string): Promise<ConflictData> => {
 	const remoteNote = note.conflict_original_id ? await Note.load(note.conflict_original_id) : null;
 	if (!remoteNote) return unavailable();
 	if (remoteNote.encryption_applied || remoteNote.is_locked) return unavailable();
+	if (remoteNote.deleted_time) return unavailable();
 
 	const localBody = note.body ?? '';
 	const remoteBody = remoteNote.body ?? '';

@@ -122,6 +122,17 @@ describe('loadConflictData', () => {
 		expect(data.sections).toEqual([]);
 	});
 
+	test('should be unavailable when the original is in the trash', async () => {
+		const note = await createConflictNote('mine', 'theirs');
+		await saveState(note.id, {});
+
+		expect((await loadConflictData(note.id)).status).toBe(ConflictDataStatus.Ok);
+
+		await Note.delete(note.conflict_original_id, { toTrash: true });
+
+		expect((await loadConflictData(note.id)).status).toBe(ConflictDataStatus.Unavailable);
+	});
+
 	test('should be unavailable when the note does not exist', async () => {
 		const data = await loadConflictData('7a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d');
 

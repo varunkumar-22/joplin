@@ -23,7 +23,7 @@ import { AppState } from '../../app.reducer';
 import ToolbarButtonUtils, { ToolbarButtonInfo } from '@joplin/lib/services/commands/ToolbarButtonUtils';
 import { _, _n } from '@joplin/lib/locale';
 import NoteTitleBar from './NoteTitle/NoteTitleBar';
-import useConflictTitle from './utils/useConflictTitle';
+import useConflictTitle, { ConflictStaleReason } from './utils/useConflictTitle';
 import ConflictFooter from './ConflictFooter/ConflictFooter';
 import ConflictBanner from './ConflictBanner/ConflictBanner';
 import bridge from '../../services/bridge';
@@ -88,6 +88,8 @@ const toolbarButtonUtils = new ToolbarButtonUtils(CommandService.instance());
 
 const onDragOver: React.DragEventHandler = event => event.preventDefault();
 let editorIdCounter = 0;
+
+const trashedConflictMessage = () => _('The note this conflict belongs to is in the trash. The conflict UI is unavailable. Restore it to continue.');
 
 function NoteEditorContent(props: NoteEditorProps) {
 	const [showRevisions, setShowRevisions] = useState(false);
@@ -213,7 +215,7 @@ function NoteEditorContent(props: NoteEditorProps) {
 
 	const formNoteFolder = useFolder({ folderId: formNote.parent_id });
 
-	const { conflictTitle, resolvedTitle, setResolvedTitle, hasTitleConflict, isConflictNote: noteHasConflict, remoteUpdatedTime, originalIsStale, reloadConflict } = useConflictTitle(formNote.id);
+	const { conflictTitle, resolvedTitle, setResolvedTitle, hasTitleConflict, isConflictNote: noteHasConflict, remoteUpdatedTime, originalIsStale, staleReason, reloadConflict } = useConflictTitle(formNote.id);
 
 	// The markdown editor draws the resolution, so the rest of UI waits for it
 	const isConflictNote = noteHasConflict
@@ -227,12 +229,17 @@ function NoteEditorContent(props: NoteEditorProps) {
 
 	// Shown when the change is already known, and again if a new one appears after saving.
 	const askToReloadConflict = useCallback(() => {
+		if (staleReason === ConflictStaleReason.Trashed) {
+			bridge().showMessageBox(trashedConflictMessage(), { buttons: [_('OK')] });
+			return;
+		}
+
 		const choice = bridge().showMessageBox(
 			_('This note changed while you were resolving it. Reload to see the latest changes.'),
 			{ buttons: [_('Reload'), _('Cancel')], defaultId: 0, cancelId: 1 },
 		);
 		if (choice === 0) onConflictReload();
-	}, [onConflictReload]);
+	}, [onConflictReload, staleReason]);
 
 	const onKeepBoth = useCallback(async () => {
 		if (conflictFinishingRef.current) return;
@@ -312,7 +319,9 @@ function NoteEditorContent(props: NoteEditorProps) {
 
 			if (result.status === FinishStatus.CannotWrite) {
 				logger.warn('Could not write the resolved note', note.id, result.reason);
-				bridge().showErrorMessageBox(_('This note cannot be updated, so the conflict was left as it is. It may be read-only, locked, encrypted or in the trash.'));
+				bridge().showErrorMessageBox(result.reason === 'trashed'
+					? trashedConflictMessage()
+					: _('This note cannot be updated, so the conflict was left as it is. It may be read-only, locked or encrypted.'));
 				return;
 			}
 
@@ -952,7 +961,7 @@ function NoteEditorContent(props: NoteEditorProps) {
 	return (
 		<div style={styles.root} onDragOver={onDragOver} onDrop={onDrop} ref={containerRef}>
 			<div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-				<ConflictBanner visible={originalIsStale} onReload={onConflictReload}/>
+				<ConflictBanner visible={originalIsStale} reason={staleReason} onReload={onConflictReload}/>
 				{renderConvertHtmlToMarkdown()}
 				{renderResourceWatchingNotification()}
 				{renderResourceInSearchResultsNotification()}
