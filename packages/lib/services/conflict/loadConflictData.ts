@@ -1,5 +1,11 @@
 import Note from '../../models/Note';
+import BaseItem from '../../models/BaseItem';
 import ConflictNoteState from '../../models/ConflictNoteState';
+import Setting from '../../models/Setting';
+import ItemChange from '../../models/ItemChange';
+import { ModelType } from '../../BaseModel';
+import { itemIsReadOnlySync } from '../../models/utils/readOnly';
+import { NoteEntity } from '../database/types';
 import { MergedSection, twoWayDiff } from './diffNotes';
 import isConflictResolutionEnabled from './isConflictResolutionEnabled';
 
@@ -19,6 +25,20 @@ export interface ConflictData {
 	remoteTitle: string;
 	titleConflict: boolean;
 }
+
+const originalIsReadOnly = (original: NoteEntity) => {
+	const shareCache = BaseItem.syncShareCache;
+	if (!shareCache) return false;
+
+	return itemIsReadOnlySync(
+		ModelType.Note,
+		ItemChange.SOURCE_UNSPECIFIED,
+		{ id: original.id, share_id: original.share_id, deleted_time: original.deleted_time },
+		Setting.value('sync.userId'),
+		shareCache,
+		true,
+	);
+};
 
 const unavailable = (): ConflictData => {
 	return {
@@ -51,6 +71,8 @@ export default async (noteId: string): Promise<ConflictData> => {
 	if (!remoteNote) return unavailable();
 	if (remoteNote.encryption_applied || remoteNote.is_locked) return unavailable();
 	if (remoteNote.deleted_time) return unavailable();
+	// Refuse read-only before the UI appears
+	if (originalIsReadOnly(remoteNote)) return unavailable();
 
 	const localBody = note.body ?? '';
 	const remoteBody = remoteNote.body ?? '';
