@@ -249,6 +249,35 @@ describe('diffNotes', () => {
 		expect(result.sections.some(s => s.type === 'unchanged')).toBe(true);
 	});
 
+	test('should not conflict a whole note when one side uses Markdown hard breaks', () => {
+		const lines = ['alpha', 'beta', 'gamma', 'delta'];
+		const local = lines.map(l => `${l}  `).join('\n').replace('beta  ', 'beta edited  ');
+		const remote = lines.join('\n').replace('delta', 'delta edited');
+
+		const result = twoWayDiff(local, remote);
+		const conflicts = result.sections.filter(s => s.type === 'conflict');
+
+		expect(conflicts.length).toBe(2);
+		// Each conflict is the one edited line, not a run of unrelated lines
+		expect(conflicts.every(s => s.localLineCount === 1 && s.remoteLineCount === 1)).toBe(true);
+		// Choosing one side must not repeat the shared lines
+		const mine = result.sections.map(s => s.type === 'conflict' ? s.localText : s.text).join('\n');
+		expect(mine.split('\n').length).toBe(local.split('\n').length);
+	});
+
+	test('should keep the local whitespace on lines it did not report as a conflict', () => {
+		const local = 'alpha  \nbeta  \ngamma edited  \ndelta  ';
+		const remote = 'alpha\nbeta\ngamma\ndelta';
+
+		const result = twoWayDiff(local, remote);
+		const mine = result.sections
+			.filter(s => s.type !== 'conflict' || s.localLineCount)
+			.map(s => s.type === 'conflict' ? s.localText : s.text)
+			.join('\n');
+
+		expect(mine).toBe(local);
+	});
+
 	test('should keep one replacement together when a blank line falls inside it', () => {
 		const local = 'table\n\n\nmine';
 		const remote = 'table\n\ntheirs\n\nextra line';

@@ -148,9 +148,9 @@ export const twoWayDiff = (localRaw: string, remoteRaw: string, options: DiffOpt
 	const sections: MergedSection[] = [];
 	const mergedParts: string[] = [];
 
-	const addConflict = (local: string[], remote: string[]) => {
+	const addConflict = (local: string[], remote: string[], localStart: number) => {
 		if (!local.length && !remote.length) return;
-		const localText = local.join('\n');
+		const localText = localLines.slice(localStart, localStart + local.length).join('\n');
 		const remoteText = remote.join('\n');
 		const text = conflictPlaceholder(localText, remoteText);
 		sections.push({
@@ -169,6 +169,8 @@ export const twoWayDiff = (localRaw: string, remoteRaw: string, options: DiffOpt
 	let removed: string[] = [];
 	let added: string[] = [];
 
+	let localCursor = 0;
+
 	for (const change of changes) {
 		if (change.added) {
 			added = added.concat(change.value);
@@ -179,16 +181,18 @@ export const twoWayDiff = (localRaw: string, remoteRaw: string, options: DiffOpt
 			continue;
 		}
 
-		addConflict(removed, added);
+		addConflict(removed, added, localCursor);
+		localCursor += removed.length;
 		removed = [];
 		added = [];
 
-		const text = change.value.join('\n');
+		const text = localLines.slice(localCursor, localCursor + change.value.length).join('\n');
+		localCursor += change.value.length;
 		sections.push({ text, type: 'unchanged' });
 		mergedParts.push(text);
 	}
 
-	addConflict(removed, added);
+	addConflict(removed, added, localCursor);
 
 	return { mergedText: mergedParts.join('\n'), sections };
 };

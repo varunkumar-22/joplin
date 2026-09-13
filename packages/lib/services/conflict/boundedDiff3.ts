@@ -45,10 +45,11 @@ interface Hunk {
 export interface DiffOptions {
 	maxEditLength: number;
 	timeout: number;
+	ignoreTrailingWhitespace?: boolean;
 }
 
 export const diffOptions: DiffOptions = { maxEditLength: 5000, timeout: 1000 };
-export const viewerDiffOptions: DiffOptions = { maxEditLength: 10000, timeout: 3000 };
+export const viewerDiffOptions: DiffOptions = { maxEditLength: 10000, timeout: 3000, ignoreTrailingWhitespace: true };
 
 const isTableLine = (line: string) => line.trimStart().startsWith('|');
 
@@ -72,6 +73,8 @@ const splitCells = (line: string) => {
 	return cells;
 };
 
+const trimEnd = (line: string) => line.replace(/[ \t]+$/, '');
+
 // Used only to decide whether two table lines match, never emitted: editing one
 // cell re-pads every row, which would otherwise make the whole table a conflict
 const normaliseTableLine = (line: string) => {
@@ -82,11 +85,11 @@ const normaliseTableLine = (line: string) => {
 
 // Table lines are matched on their normalised form so column padding cannot cause
 // a false conflict, while the originals are what the regions carry and what gets
-// written back. Whitespace elsewhere is a real edit and is left alone.
-export const sameLine = (a: string, b: string) => {
+// written back.
+export const sameLine = (a: string, b: string, ignoreTrailingWhitespace = false) => {
 	if (a === b) return true;
-	if (!isTableLine(a) || !isTableLine(b)) return false;
-	return normaliseTableLine(a) === normaliseTableLine(b);
+	if (isTableLine(a) && isTableLine(b)) return normaliseTableLine(a) === normaliseTableLine(b);
+	return ignoreTrailingWhitespace && trimEnd(a) === trimEnd(b);
 };
 
 // The duplicate line check and the merge diff the same two pairs, so whichever runs
@@ -102,7 +105,8 @@ export const createDiffLines = (options: DiffOptions = diffOptions): DiffLines =
 		const cached = cache.find(entry => entry.base === base && entry.side === side);
 		if (cached) return cached.changes;
 
-		const changes: ArrayChange[]|undefined = diffArrays(base, side, { ...options, comparator: sameLine });
+		const comparator = (a: string, b: string) => sameLine(a, b, options.ignoreTrailingWhitespace);
+		const changes: ArrayChange[]|undefined = diffArrays(base, side, { ...options, comparator });
 		cache.push({ base, side, changes });
 		return changes;
 	};
