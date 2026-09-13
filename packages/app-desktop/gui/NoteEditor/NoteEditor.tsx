@@ -90,7 +90,7 @@ const toolbarButtonUtils = new ToolbarButtonUtils(CommandService.instance());
 const onDragOver: React.DragEventHandler = event => event.preventDefault();
 let editorIdCounter = 0;
 
-const trashedConflictMessage = () => _('The note this conflict belongs to is in the trash. The conflict UI is unavailable. Restore it to continue.');
+const trashedConflictMessage = () => _('The note this conflict belongs to is in the trash. Restore it to finish resolving the conflict.');
 
 function NoteEditorContent(props: NoteEditorProps) {
 	const [showRevisions, setShowRevisions] = useState(false);

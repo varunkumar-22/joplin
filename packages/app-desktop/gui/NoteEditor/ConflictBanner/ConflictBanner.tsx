@@ -20,7 +20,7 @@ const ConflictBanner: React.FC<Props> = ({ visible, reason, onReload }) => {
 			onAccept={trashed ? undefined : onReload}
 		>
 			{trashed
-				? _('The note this conflict belongs to is in the trash. The conflict UI is unavailable. Restore it to continue.')
+				? _('The note this conflict belongs to is in the trash. Restore it to finish resolving the conflict.')
 				: _('This note changed elsewhere while you were resolving it. Reload to see the latest changes.')}
 		</BannerContent>
 	);
