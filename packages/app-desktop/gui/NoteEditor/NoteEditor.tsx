@@ -284,12 +284,6 @@ function NoteEditorContent(props: NoteEditorProps) {
 			// A pending save would land after the note is deleted and bring it back
 			await note.saveActionQueue?.waitForAllDone();
 
-			if (!editorRef.current?.conflictIsReady?.()) {
-				logger.warn('Conflict resolution is not ready yet for note', note.id);
-				bridge().showErrorMessageBox(_('This conflict is still loading. Please try again in a moment.'));
-				return;
-			}
-
 			// A half-resolved merge is never saved, so only the editor has it
 			const body = await editorRef.current?.content();
 			if (body === undefined || body === null) {
