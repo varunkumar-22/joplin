@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import loadConflictData, { ConflictDataStatus } from '@joplin/lib/services/conflict/loadConflictData';
+import { conflictNoteIsResolvable } from '@joplin/lib/services/conflict/conflictIsResolvable';
 import Note from '@joplin/lib/models/Note';
 import eventManager, { EventName, ItemChangeEvent } from '@joplin/lib/eventManager';
 import { ModelType } from '@joplin/lib/BaseModel';
@@ -46,7 +47,7 @@ const useConflictTitle = (noteId: string) => {
 				setStaleReason(ConflictStaleReason.Changed);
 				setOriginalId(note?.conflict_original_id ?? null);
 
-				if (!note || !note.is_conflict) {
+				if (!conflictNoteIsResolvable(note)) {
 					setTitles(null);
 					setIsConflict(false);
 					setLoadedNoteId(noteId);

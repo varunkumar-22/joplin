@@ -1703,6 +1703,8 @@ packages/lib/services/conflict/boundedDiff3.test.js
 packages/lib/services/conflict/boundedDiff3.js
 packages/lib/services/conflict/buildConflictDocument.test.js
 packages/lib/services/conflict/buildConflictDocument.js
+packages/lib/services/conflict/conflictIsResolvable.test.js
+packages/lib/services/conflict/conflictIsResolvable.js
 packages/lib/services/conflict/decryptNoteInMemory.js
 packages/lib/services/conflict/diffNotes.test.js
 packages/lib/services/conflict/diffNotes.js

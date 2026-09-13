@@ -3,8 +3,8 @@ import CodeMirrorControl from '@joplin/editor/CodeMirror/CodeMirrorControl';
 import conflictResolutionExtension, { setConflictRegions } from '@joplin/editor/CodeMirror/extensions/conflictResolutionExtension';
 import loadConflictData, { ConflictDataStatus } from '@joplin/lib/services/conflict/loadConflictData';
 import Note from '@joplin/lib/models/Note';
+import { conflictNoteIsResolvable } from '@joplin/lib/services/conflict/conflictIsResolvable';
 import buildConflictDocument, { ConflictDocument, ConflictRegionKind } from '@joplin/lib/services/conflict/buildConflictDocument';
-import { MarkupLanguage } from '@joplin/renderer';
 import Logger from '@joplin/utils/Logger';
 
 const logger = Logger.create('useConflictResolution');
@@ -32,8 +32,7 @@ const useConflictResolution = ({ noteId, inView, contentMarkupLanguage, editorRe
 	const installedRef = useRef(false);
 
 	useEffect(() => {
-		// loadConflictData rejects everything else, so only markup needs checking here
-		if (!inView || contentMarkupLanguage !== MarkupLanguage.Markdown) {
+		if (!inView) {
 			setLoaded(null);
 			return () => {};
 		}
@@ -44,7 +43,8 @@ const useConflictResolution = ({ noteId, inView, contentMarkupLanguage, editorRe
 			try {
 				const note = await Note.load(noteId);
 				if (cancelled) return;
-				if (!note || !note.is_conflict) {
+
+				if (!conflictNoteIsResolvable(note)) {
 					setLoaded(null);
 					return;
 				}
